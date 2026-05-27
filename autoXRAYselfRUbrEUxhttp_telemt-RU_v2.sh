@@ -952,7 +952,7 @@ echo -e "${GRN}✅ Файл .txt создан: $rawSubPageLink${NC}"
 
 echo -e "\n\n${GRN}Устанавливаем MTProto FakeTLS ${NC}"
 # source <(curl -sL https://github.com/xVRVx/autoXRAY/raw/refs/heads/main/test/telemt-test.sh)
-source <(curl -sL https://raw.githubusercontent.com/EtoDets/Auto-XRAY_Telemt-Custom/main/telemt.sh)
+source <(curl -sL https://raw.githubusercontent.com/EtoDets/Auto-XRAY_Telemt/main/telemt.sh)
 
 
 echo -e "\n\n${GRN}Создаем страницу подписки ${NC}"

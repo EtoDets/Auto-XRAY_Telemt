@@ -1023,7 +1023,7 @@ ALL_LINKS_TEXT=""
 
 echo -e "\n\n${GRN}Устанавливаем MTProto FakeTLS ${NC}"
 # source <(curl -sL https://github.com/xVRVx/autoXRAY/raw/refs/heads/main/test/telemt-test.sh)
-source <(curl -sL https://raw.githubusercontent.com/EtoDets/Auto-XRAY_Telemt-Custom/main/telemt.sh)
+source <(curl -sL https://raw.githubusercontent.com/EtoDets/Auto-XRAY_Telemt/main/telemt.sh)
 
 # --- ЗАПИСЬ HEAD (СТАТИКА, МИНИФИЦИРОВАННЫЕ СТИЛИ И JS) ---
 cat > "$WEB_PATH/$path_subpage.html" <<EOF
