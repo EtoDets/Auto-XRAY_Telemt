@@ -577,12 +577,12 @@ cat << 'EOF' | envsubst > "$SCRIPT_DIR/config.json"
             }
         },
         {
-            "tag": "socks5",
+            "tag": "socks5-local",
             "port": 10444,
             "listen": "127.0.0.1",
             "protocol": "mixed",
             "settings": {
-                "udp": true,
+                "udp": true
             }
         },
         {
