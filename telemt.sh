@@ -1,4 +1,4 @@
-echo -e "${GRN}Версия телемт: какая-то ${NC}"
+echo -e "${GRN}Установка Telemt ${NC}"
 
 systemctl stop telemt 2>/dev/null
 
