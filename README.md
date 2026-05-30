@@ -32,3 +32,12 @@ systemctl stop telemt; systemctl disable telemt; rm -f /etc/systemd/system/telem
 
 
 Автор - https://github.com/xVRVx/autoXRAY
+
+---
+---
+---
+
+## TEMP - Uninstall
+```
+bash -c "$(curl -L https://raw.githubusercontent.com/EtoDets/Auto-XRAY_Telemt/Tools/main/uninstall.sh)"
+```
