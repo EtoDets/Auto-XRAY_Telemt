@@ -18,7 +18,7 @@ if [ -z "$DOMAIN" ]; then
 fi
 
 echo -e "${YEL}Обновление и установка необходимых пакетов...${NC}"
-apt-get update && apt-get install curl jq dnsutils openssl nginx certbot wget tar -y
+apt-get update -qq && apt-get install curl jq dnsutils openssl nginx certbot wget tar -y -qq
 systemctl enable --now nginx
 
 LOCAL_IP=$(hostname -I | awk '{print $1}')
@@ -1121,7 +1121,7 @@ done
     printf '%s\n' "${linkTLS3}"
     printf '%s\n' "${linkTLS4}"
 } > "$WEB_PATH/${path_subpage}.txt"
-echo -e "${GRN}✅ Файл .txt создан: $rawSubPageLink${NC}"
+echo -e "${GRN}✅ Файл подписки .txt создан: $rawSubPageLink${NC}"
 
 SOCKS5_url="tg://socks?server=$DOMAIN&port=10443&user=${socksUser}&pass=${socksPasw}"
 
@@ -1184,7 +1184,7 @@ else
 fi
 
 echo -e "\n\n${GRN}Устанавка update-xray-geodata ${NC}"
-source <(curl -sL https://raw.githubusercontent.com/EtoDets/Auto-XRAY_Telemt-Custom/main/geodata_update.sh)
+source <(curl -sL https://raw.githubusercontent.com/EtoDets/Auto-XRAY_Telemt/main/geodata_update.sh)
 
 echo -e "
 ${YEL}MTProto FakeTLS для ТГ${NC}
