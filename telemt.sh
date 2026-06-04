@@ -1,4 +1,4 @@
-echo -e "${GRN}Установка Telemt ${NC}"
+echo -e "${GRN}Установка Telemt - MTProto FakeTLS${NC}"
 
 systemctl stop telemt 2>/dev/null
 
@@ -94,6 +94,8 @@ systemctl daemon-reload
 sleep 2
 systemctl start telemt
 systemctl enable telemt
+
+echo -e "${GRN}Telemt Установлен ${NC}"
 
 sleep 3
 telemtSecret=$(curl -s http://127.0.0.1:9091/v1/users | jq -r '.data[0].links.tls[0] | split("secret=")[1]')
