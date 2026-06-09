@@ -20,13 +20,16 @@ stop_and_remove_xray() {
     systemctl stop xray 2>/dev/null
     systemctl disable xray 2>/dev/null
     bash -c "$(curl -sL https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ remove 2>/dev/null
-    # На случай если install-release.sh не отработал (TEMP)
-    # rm -f /usr/local/bin/xray
-    # rm -f /etc/systemd/system/xray.service
-    # rm -f /etc/systemd/system/xray@.service
-    # rm -rf /usr/local/etc/xray/
-    # rm -rf /var/log/xray/
-    # rm -rf /var/lib/xray/
+
+    # На случай если install-release.sh не отработал
+    rm -f /usr/local/bin/xray
+    rm -f /etc/systemd/system/xray.service
+    rm -f /etc/systemd/system/xray@.service
+    rm -rf /usr/local/etc/xray/
+    rm -rf /var/log/xray/
+    rm -rf /var/lib/xray/
+    rm -rf /usr/local/share/xray/
+
     systemctl daemon-reload
     echo -e "${GRN}✅ Xray удалён${NC}"
 }
@@ -59,38 +62,6 @@ remove_telemt() {
     rm -rf /var/lib/telemt/ 2>/dev/null
     systemctl daemon-reload
     echo -e "${GRN}✅ Telemt удалён${NC}"
-}
-
-remove_nginx_config() {
-    echo -e "${YEL}▶ Сбрасываем конфигурацию Nginx...${NC}"
-    if [ -f /etc/nginx/sites-available/default ]; then
-        cat > /etc/nginx/sites-available/default <<'EOF'
-server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
-    root /var/www/html;
-    index index.html index.htm index.nginx-debian.html;
-    server_name _;
-    location / {
-        try_files $uri $uri/ =404;
-    }
-}
-EOF
-    elif [ -f /etc/nginx/conf.d/default.conf ]; then
-        cat > /etc/nginx/conf.d/default.conf <<'EOF'
-server {
-    listen 80 default_server;
-    server_name _;
-    root /var/www/html;
-    index index.html;
-    location / {
-        try_files $uri $uri/ =404;
-    }
-}
-EOF
-    fi
-    systemctl restart nginx 2>/dev/null
-    echo -e "${GRN}✅ Конфиг Nginx сброшен${NC}"
 }
 
 remove_nginx_full() {
@@ -139,8 +110,11 @@ remove_sysctl_limits() {
 
 remove_symlinks_and_files() {
     echo -e "${YEL}▶ Удаляем симлинки и файлы autoXRAY...${NC}"
-    rm -f ~/xray-config
-    rm -f ~/web-config
+    rm -f ~/_nginx
+    rm -f ~/_xray_log
+    rm -f ~/_web_config
+    rm -f ~/_xray_config
+    rm -f ~/x-geodata
     rm -f ~/autoXRAY_links.txt
     rm -f /dev/shm/nginx.sock 2>/dev/null
     rm -f /dev/shm/nginxTLS.sock 2>/dev/null
