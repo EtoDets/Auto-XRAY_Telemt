@@ -6,7 +6,7 @@ RED='\033[1;31m'
 YEL='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GRN}Версия: 222 ${NC}"
+echo -e "${GRN}Версия: 2.5 ${NC}"
 
 [[ $EUID -eq 0 ]] || { echo -e "${RED}❌ скрипту нужны root права ${NC}"; exit 1; }
 
@@ -38,6 +38,52 @@ if [ "$LOCAL_IP" != "$DNS_IP" ]; then
 fi
 
 
+
+# ВОПРОСЫ ПОЛЬЗОВАТЕЛЮ ПЕРЕД УСТАНОВКОЙ
+# ================================================== #
+
+read -p "$(echo -e "\n${YEL}Устанавливать WARP для обхода блокировок некоторых сайтов? (y/n, по умолчанию y): ${NC}")" choice_warp
+choice_warp=${choice_warp:-y}
+if [[ "$choice_warp" =~ ^[Yy]$ ]]; then
+    TAG_WARP="warp"
+    INSTALL_WARP=true
+else
+    TAG_WARP="direct"
+    INSTALL_WARP=false
+fi
+
+# ========================= #
+
+read -p "$(echo -e "\n${YEL}Устанавливать MTProxy для Telegram? (y/n, по умолчанию y): ${NC}")" choice_mtp
+choice_mtp=${choice_mtp:-y}
+if [[ "$choice_mtp" =~ ^[Yy]$ ]]; then
+    TARGET_MTP="127.0.0.1:500"
+    INSTALL_MTP=true
+else
+    TARGET_MTP="/dev/shm/nginx.sock"
+    INSTALL_MTP=false
+fi
+
+# ========================= #
+
+echo -e "\n${YEL}Выберите TLS fingerprint для маскировки трафика:${NC}"
+echo "1) chrome    3) safari   5) android   7) 360"
+echo "2) firefox   4) ios      6) edge      8) qq"
+read -p "Введите номер [1-8] (по умолчанию 2 - firefox): " fp_choice
+
+case $fp_choice in
+    1) fpBro="chrome" ;;
+    2) fpBro="firefox" ;;
+    3) fpBro="safari" ;;
+    4) fpBro="ios" ;;
+    5) fpBro="android" ;;
+    7) fpBro="360" ;;
+    8) fpBro="qq" ;;
+    *) fpBro="firefox" ;;
+esac
+
+# ================================================== #
+
 # Включаем BBR
 bbr=$(sysctl -a | grep net.ipv4.tcp_congestion_control)
 if [ "$bbr" = "net.ipv4.tcp_congestion_control = bbr" ]; then
@@ -66,7 +112,10 @@ get_flag_emoji() {
 
 COUNTRY_FLAG=$(get_flag_emoji "$COUNTRY_CODE")
 PAGE_TITLE="${COUNTRY_FLAG} AutoXRAY Configs"
-echo -e "${GRN}Определена страна сервера: $COUNTRY_CODE $COUNTRY_FLAG${NC}"
+echo -e "${GRN}Определена страна сервера: $COUNTRY_CODE ${NC}"
+
+# URL-encode флага (для использования в ссылках/якорях)
+FLAG_ENCODED=$(printf '%s' "$COUNTRY_FLAG" | od -An -tx1 | tr -d ' \n' | sed 's/../%&/g' | tr '[:lower:]' '[:upper:]')
 
 cat <<EOF > /etc/security/limits.d/99-autoXRAY.conf
 *       soft    nofile  1048576
@@ -190,19 +239,6 @@ server {
     ssl_certificate "/etc/letsencrypt/live/$DOMAIN/fullchain.pem";
     ssl_certificate_key "/etc/letsencrypt/live/$DOMAIN/privkey.pem";
 
-    location = /${path_subpage}.json {
-        add_header profile-title "base64:YXV0b1hSQVk=";
-        add_header routing "happ://routing/onadd/eyJOYW1lIjoiYXV0b1hSQVkiLCJHbG9iYWxQcm94eSI6InRydWUiLCJSb3V0ZU9yZGVyIjoiYmxvY2stcHJveHktZGlyZWN0IiwiUmVtb3RlRE5TVHlwZSI6IkRvSCIsIlJlbW90ZUROU0RvbWFpbiI6Imh0dHBzOi8vZG5zLmdvb2dsZS9kbnMtcXVlcnkiLCJSZW1vdGVETlNJUCI6IjguOC40LjQiLCJEb21lc3RpY0ROU1R5cGUiOiJEb0giLCJEb21lc3RpY0ROU0RvbWFpbiI6Imh0dHBzOi8vY2xvdWRmbGFyZS1kbnMuY29tL2Rucy1xdWVyeSIsIkRvbWVzdGljRE5TSVAiOiIxLjEuMS4xIiwiR2VvaXB1cmwiOiJodHRwczovL2dpdGh1Yi5jb20vTG95YWxzb2xkaWVyL3YycmF5LXJ1bGVzLWRhdC9yZWxlYXNlcy9sYXRlc3QvZG93bmxvYWQvZ2VvaXAuZGF0IiwiR2Vvc2l0ZXVybCI6Imh0dHBzOi8vZ2l0aHViLmNvbS9Mb3lhbHNvbGRpZXIvdjJyYXktcnVsZXMtZGF0L3JlbGVhc2VzL2xhdGVzdC9kb3dubG9hZC9nZW9zaXRlLmRhdCIsIkxhc3RVcGRhdGVkIjoiMTc3NTIwNjEwOCIsIkRuc0hvc3RzIjp7fSwiRGlyZWN0U2l0ZXMiOlsiZ2Vvc2l0ZTpjYXRlZ29yeS1ydSIsImdlb3NpdGU6cHJpdmF0ZSJdLCJEaXJlY3RJcCI6WyJnZW9pcDpwcml2YXRlIl0sIlByb3h5U2l0ZXMiOltdLCJQcm94eUlwIjpbXSwiQmxvY2tTaXRlcyI6WyJnZW9zaXRlOmNhdGVnb3J5LWFkcyIsImdlb3NpdGU6d2luLXNweSJdLCJCbG9ja0lwIjpbXSwiRG9tYWluU3RyYXRlZ3kiOiJJUElmTm9uTWF0Y2giLCJGYWtlRE5TIjoiZmFsc2UiLCJVc2VDaHVua0ZpbGVzIjoiZmFsc2UifQ";
-
-        return 403;
-
-        add_header routing-enable 0;
-        add_header Referrer-Policy "no-referrer" always;
-        add_header X-Robots-Tag "noindex, nofollow, noarchive, nosnippet" always;
-        add_header Cache-Control "no-store" always;
-        add_header X-Frame-Options "DENY" always;
-    }
-
     location = /${path_subpage}.html {
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Robots-Tag "noindex, nofollow, noarchive, nosnippet" always;
@@ -285,750 +321,474 @@ socksPasw=$(openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | head -c 16)
 
 
 # Установка WARP-cli
-# Посмотреть порт(2408): grep -r "Endpoint" /etc/wireguard/
-if ss -tuln | grep -q ":40000 "; then
-    echo -e "${GRN}WARP-cli (Socks5 на порту 40000) уже работает. Пропускаем.${NC}"
+if [ "$INSTALL_WARP" = true ]; then
+    if ss -tuln | grep -q ":40000 "; then
+        echo -e "${GRN}WARP-cli (Socks5 на порту 40000) уже работает. Пропускаем.${NC}"
+    else
+        echo -e "${GRN}Установка WARP-cli (автоматически)...${NC}"
+        echo -e "1\n1\n40000" | bash <(curl -fsSL https://gitlab.com/fscarmen/warp/-/raw/main/menu.sh) w
+    fi
 else
-    echo -e "${GRN}Установка WARP-cli (автоматически)...${NC}"
-    echo -e "1\n1\n40000" | bash <(curl -fsSL https://gitlab.com/fscarmen/warp/-/raw/main/menu.sh) w
+    echo -e "${YEL}Установка WARP пропущена по выбору пользователя.${NC}"
 fi
 
 # Экспортируем переменные для envsubst
-export xray_uuid_vrv xray_privateKey_vrv xray_publicKey_vrv xray_shortIds_vrv xray_sspasw_vrv DOMAIN path_subpage path_xhttp WEB_PATH socksUser socksPasw
+export xray_uuid_vrv xray_privateKey_vrv xray_publicKey_vrv xray_shortIds_vrv xray_sspasw_vrv DOMAIN path_subpage path_xhttp WEB_PATH socksUser socksPasw TARGET_MTP TAG_WARP fpBro
 
 # Создаем JSON конфигурацию сервера
 cat << 'EOF' | envsubst > "$SCRIPT_DIR/config.json"
 {
-    "log": {
-        "dnsLog": false,
-        "access": "/var/log/xray/access.log",
-        "error": "/var/log/xray/error.log",
-        "loglevel": "none"
-    },
-    "stats": {},
-    "api": {
-        "tag": "api",
-        "services": [
-            "HandlerService",
-            "LoggerService",
-            "StatsService",
-            "RoutingService"
-        ]
-    },
-    "policy": {
-        "levels": {
-            "0": {
-                "statsUserDownlink": true,
-                "statsUserUplink": true
-            }
-        },
-        "system": {
-            "statsInboundDownlink": true,
-            "statsInboundUplink": true,
-            "statsOutboundDownlink": true,
-            "statsOutboundUplink": true
-        }
-    },
-    "dns": {
-        "servers": [
-            "https+local://1.1.1.1/dns-query",
-            "https+local://1.0.0.1/dns-query",
-            "https+local://9.9.9.9/dns-query",
-            "https+local://8.8.4.4/dns-query",
-            "https+local://8.8.8.8/dns-query",
-            "localhost"
-        ],
-        "queryStrategy": "UseIP"
-    },
-    "inbounds": [
-        {
-            "tag": "vlessRAWrtyVISION",
-            "port": 443,
-            "listen": "0.0.0.0",
-            "protocol": "vless",
-            "settings": {
-                "clients": [
-                    {
-                        "flow": "xtls-rprx-vision",
-                        "id": "${xray_uuid_vrv}"
-                    }
-                ],
-                "decryption": "none",
-                "fallbacks": [
-                    {
-                        "dest": "3333",
-                        "xver": 2
-                    }
-                ]
-            },
-            "sniffing": {
-                "enabled": true,
-                "destOverride": [
-                    "http",
-                    "tls",
-                    "quic"
-                ]
-            },
-            "streamSettings": {
-                "network": "raw",
-                "security": "reality",
-                "sockopt": {
-                    "acceptProxyProtocol": false
-                },
-                "realitySettings": {
-                    "show": false,
-                    "xver": 2,
-                    "target": "127.0.0.1:500",
-                    "spiderX": "/",
-                    "shortIds": [
-                        "${xray_shortIds_vrv}"
-                    ],
-                    "privateKey": "${xray_privateKey_vrv}",
-                    "serverNames": [
-                        "$DOMAIN"
-                    ]
-                }
-            }
-        },
-        {
-            "tag": "vlessXHTTPrty",
-            "port": 3333,
-            "listen": "127.0.0.1",
-            "protocol": "vless",
-            "settings": {
-                "clients": [
-                    {
-                        "id": "${xray_uuid_vrv}"
-                    }
-                ],
-                "decryption": "none"
-            },
-            "sniffing": {
-                "enabled": true,
-                "destOverride": [
-                    "http",
-                    "tls",
-                    "quic"
-                ]
-            },
-            "streamSettings": {
-                "network": "xhttp",
-                "xhttpSettings": {
-                    "mode": "stream-one",
-                    "path": "/${path_xhttp}"
-                },
-                "security": "none",
-                "sockopt": {
-                    "acceptProxyProtocol": true
-                }
-            }
-        },
-        {
-            "tag": "vlessRAWtlsVISION",
-            "port": 8443,
-            "listen": "0.0.0.0",
-            "protocol": "vless",
-            "settings": {
-                "clients": [
-                    {
-                        "flow": "xtls-rprx-vision",
-                        "id": "${xray_uuid_vrv}"
-                    }
-                ],
-                "decryption": "none",
-                "fallbacks": [
-                    {
-                        "path": "/${path_xhttp}22",
-                        "dest": "@vless-ws",
-                        "xver": 2
-                    },
-                    {
-                        "path": "/ssws",
-                        "dest": "4001"
-                    },
-                    {
-                        "alpn": "h2",
-                        "dest": "/dev/shm/nginx_h2.sock",
-                        "xver": 2
-                    },
-                    {
-                        "dest": "/dev/shm/nginxTLS.sock",
-                        "xver": 2
-                    }
-                ]
-            },
-            "streamSettings": {
-                "network": "raw",
-                "security": "tls",
-                "tlsSettings": {
-                    "certificates": [
-                        {
-                            "certificateFile": "/var/lib/xray/cert/fullchain.pem",
-                            "keyFile": "/var/lib/xray/cert/privkey.pem"
-                        }
-                    ],
-                    "minVersion": "1.2",
-                    "cipherSuites": "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256:TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256:TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384:TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384:TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256:TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
-                    "alpn": [
-                        "h2",
-                        "http/1.1"
-                    ]
-                }
-            },
-            "sniffing": {
-                "enabled": true,
-                "destOverride": [
-                    "http",
-                    "tls",
-                    "quic"
-                ]
-            }
-        },
-        {
-            "tag": "vlessXHTTPtls",
-            "port": 8400,
-            "listen": "127.0.0.1",
-            "protocol": "vless",
-            "settings": {
-                "clients": [
-                    {
-                        "id": "${xray_uuid_vrv}"
-                    }
-                ],
-                "decryption": "none"
-            },
-            "streamSettings": {
-                "network": "xhttp",
-                "xhttpSettings": {
-                    "mode": "auto",
-                    "path": "/${path_xhttp}"
-                },
-                "security": "none",
-                "sockopt": {
-                    "acceptProxyProtocol": false
-                }
-            },
-            "sniffing": {
-                "enabled": true,
-                "destOverride": [
-                    "http",
-                    "tls",
-                    "quic"
-                ]
-            }
-        },
-        {
-            "tag": "vlessGRPCtls",
-            "port": 8411,
-            "listen": "127.0.0.1",
-            "protocol": "vless",
-            "settings": {
-                "clients": [
-                    {
-                        "id": "${xray_uuid_vrv}"
-                    }
-                ],
-                "decryption": "none"
-            },
-            "streamSettings": {
-                "network": "grpc",
-                "grpcSettings": {
-                    "serviceName": "${path_xhttp}11"
-                },
-                "security": "none"
-            },
-            "sniffing": {
-                "enabled": true,
-                "destOverride": [
-                    "http",
-                    "tls",
-                    "quic"
-                ]
-            }
-        },
-        {
-            "listen": "@vless-ws",
-            "protocol": "vless",
-            "settings": {
-                "clients": [
-                    {
-                        "id": "${xray_uuid_vrv}"
-                    }
-                ],
-                "decryption": "none"
-            },
-            "streamSettings": {
-                "network": "ws",
-                "wsSettings": {
-                    "acceptProxyProtocol": true,
-                    "path": "/${path_xhttp}22"
-                },
-                "security": "none"
-            },
-            "sniffing": {
-                "enabled": true,
-                "destOverride": [
-                    "http",
-                    "tls",
-                    "quic"
-                ]
-            }
-        },
-        {
-            "tag": "socks5",
-            "port": 10443,
-            "listen": "0.0.0.0",
-            "protocol": "mixed",
-            "settings": {
-                "ip": "0.0.0.0",
-                "udp": true,
-                "auth": "password",
-                "accounts": [
-                    {
-                        "user": "${socksUser}",
-                        "pass": "${socksPasw}"
-                    }
-                ]
-            }
-        },
-        {
-            "tag": "socks5-local",
-            "port": 10444,
-            "listen": "127.0.0.1",
-            "protocol": "mixed",
-            "settings": {
-                "udp": true
-            }
-        },
-        {
-            "listen": "127.0.0.1",
-            "port": 10185,
-            "protocol": "dokodemo-door",
-            "settings": {
-                "address": "127.0.0.1"
-            },
-            "tag": "api"
-        }
-    ],
-    "outbounds": [
-        {
-            "tag": "direct",
-            "protocol": "freedom",
-            "settings": {
-                "domainStrategy": "UseIPv4"
-            }
-        },
-        {
-            "tag": "block",
-            "protocol": "blackhole"
-        },
-        {
-            "tag": "warp",
-            "protocol": "socks",
-            "settings": {
-                "servers": [
-                    {
-                        "address": "127.0.0.1",
-                        "port": 40000
-                    }
-                ]
-            }
-        }
-    ],
-    "routing": {
-        "rules": [
-            {
-                "inboundTag": ["api"],
-                "outboundTag": "api"
-            },
-            {
-                "ip": [
-                    "geoip:private"
-                ],
-                "outboundTag": "block"
-            },
-            {
-                "port": "25",
-                "outboundTag": "block"
-            },
-            {
-                "protocol": [
-                    "bittorrent"
-                ],
-                "outboundTag": "block"
-            },
-            {
-                "domain": [
-                    "geosite:private",
-                    "geosite:win-spy",
-                    "geosite:category-ads",
-                    "geosite:category-ads-all"
-                ],
-                "outboundTag": "block"
-            },
-            {
-                "outboundTag": "warp",
-                "domain": [
-                    "habr.com",
-                    "geosite:canva",
-                    "geosite:openai",
-                    "geosite:spotify",
-                    "geosite:whatsapp",
-                    "geosite:anthropic",
-                    "geosite:google-gemini"
-                ]
-            }
-        ],
-        "domainStrategy": "IPIfNonMatch"
-    }
-}
-
-EOF
-
-# Создаем JSON конфигурацию клиента
-print_config() {
-    local PROXY_OUTBOUND="$1"
-    local REMARK="$2"
-
-    cat << TPL
-{
-    "log": {
-        "loglevel": "warning"
-    },
-    "dns": {
-        "servers": [
-            "https://8.8.4.4/dns-query",
-            "https://8.8.8.8/dns-query",
-            "https://1.1.1.1/dns-query"
-        ],
-        "queryStrategy": "UseIPv4"
-    },
-    "routing": {
-        "domainStrategy": "IPIfNonMatch",
-        "rules": [
-            {
-                "domain": [
-                    "geosite:category-ads",
-                    "geosite:win-spy"
-                ],
-                "outboundTag": "block"
-            },
-            {
-                "protocol": [
-                    "bittorrent"
-                ],
-                "outboundTag": "direct"
-            },
-            {
-                "domain": [
-                    "habr.com",
-                    "apkmirror.com"
-                ],
-                "outboundTag": "proxy"
-            },
-            {
-                "domain": [
-                    "geosite:private",
-                    "ifconfig.me",
-                    "checkip.amazonaws.com",
-                    "pify.org",
-                    "geosite:category-ip-geo-detect",
-                    "geosite:apple",
-                    "geosite:apple-pki",
-                    "geosite:huawei",
-                    "geosite:xiaomi",
-                    "geosite:category-android-app-download",
-                    "geosite:f-droid",
-                    "geosite:yandex",
-                    "geosite:vk",
-                    "geosite:microsoft",
-                    "geosite:win-update",
-                    "geosite:win-extra",
-                    "geosite:google-play",
-                    "geosite:steam",
-                    "geosite:category-ru"
-                ],
-                "outboundTag": "direct"
-            },
-            {
-                "ip": [
-                    "geoip:private"
-                ],
-                "outboundTag": "direct"
-            }
-        ]
-    },
-    "inbounds": [
-        {
-            "tag": "socks-in",
-            "protocol": "socks",
-            "listen": "127.0.0.1",
-            "port": 10808,
-            "settings": {
-                "udp": true
-            },
-            "sniffing": {
-                "enabled": true,
-                "destOverride": [
-                    "http",
-                    "tls",
-                    "quic"
-                ]
-            }
-        },
-        {
-            "tag": "socks-sb",
-            "protocol": "socks",
-            "listen": "127.0.0.1",
-            "port": 2080,
-            "settings": {
-                "udp": true
-            },
-            "sniffing": {
-                "enabled": true,
-                "destOverride": [
-                    "http",
-                    "tls",
-                    "quic"
-                ]
-            }
-        },
-        {
-            "tag": "http-in",
-            "protocol": "http",
-            "listen": "127.0.0.1",
-            "port": 10809,
-            "sniffing": {
-                "enabled": true,
-                "destOverride": [
-                    "http",
-                    "tls",
-                    "quic"
-                ]
-            }
-        }
-    ],
-    "outbounds": [
-        $PROXY_OUTBOUND,
-        {
-            "tag": "direct",
-            "protocol": "freedom"
-        },
-        {
-            "tag": "block",
-            "protocol": "blackhole"
-        }
-    ],
-    "remarks": "$REMARK"
-}
-TPL
-}
-
-# --- Config 1
-OUT_REALITY_VISION='{
-  "mux": { "concurrency": -1, "enabled": false },
-  "tag": "proxy",
-  "protocol": "vless",
-  "settings": {
-    "vnext": [{
-      "address": "$DOMAIN",
-      "port": 443,
-      "users": [{ "id": "${xray_uuid_vrv}", "flow": "xtls-rprx-vision", "encryption": "none" }]
-    }]
+  "log": {
+    "dnsLog": false,
+    "access": "/var/log/xray/access.log",
+    "error": "/var/log/xray/error.log",
+    "loglevel": "info"
   },
-  "streamSettings": {
-    "network": "raw",
-    "security": "reality",
-    "realitySettings": {
-      "show": false, "fingerprint": "firefox", "serverName": "$DOMAIN",
-      "password": "${xray_publicKey_vrv}", "shortId": "${xray_shortIds_vrv}", "spiderX": "/"
-    }
-  }
-}'
-
-# --- Config 2
-OUT_REALITY_XHTTP='{
-  "mux": { "concurrency": -1, "enabled": false },
-  "tag": "proxy",
-  "protocol": "vless",
-  "settings": {
-    "vnext": [{
-      "address": "$DOMAIN",
-      "port": 443,
-      "users": [{ "id": "${xray_uuid_vrv}", "encryption": "none" }]
-    }]
+  "stats": {},
+  "api": {
+    "tag": "api",
+    "services": [
+      "HandlerService",
+      "LoggerService",
+      "StatsService",
+      "RoutingService"
+    ]
   },
-  "streamSettings": {
-    "network": "xhttp",
-    "security": "reality",
-    "xhttpSettings": {
-      "mode": "stream-one",
-      "path": "/${path_xhttp}",
-      "extra": {
-        "noGRPCHeader": false,
-        "scMaxEachPostBytes": 1500000,
-        "scMinPostsIntervalMs": 20,
-        "scStreamUpServerSecs": "60-240",
-        "xPaddingBytes": "400-800",
-        "xmux": {
-          "cMaxReuseTimes": "1000-3000",
-          "hKeepAlivePeriod": 0,
-          "hMaxRequestTimes": "400-700",
-          "hMaxReusableSecs": "1200-1800",
-          "maxConcurrency": "3-5",
-          "maxConnections": 0
+  "policy": {
+    "levels": {
+      "0": {
+        "statsUserDownlink": true,
+        "statsUserUplink": true
+      }
+    },
+    "system": {
+      "statsInboundDownlink": true,
+      "statsInboundUplink": true,
+      "statsOutboundDownlink": true,
+      "statsOutboundUplink": true
+    }
+  },
+  "dns": {
+    "servers": [
+      "https+local://9.9.9.9/dns-query",
+      "https+local://1.1.1.1/dns-query",
+      "https+local://1.0.0.1/dns-query",
+      "https+local://8.8.4.4/dns-query",
+      "https+local://8.8.8.8/dns-query",
+      "localhost"
+    ],
+    "queryStrategy": "UseIP"
+  },
+  "inbounds": [
+    {
+      "tag": "vlessRAWrtyVISION",
+      "port": 443,
+      "listen": "0.0.0.0",
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "flow": "xtls-rprx-vision",
+            "id": "${xray_uuid_vrv}"
+          }
+        ],
+        "decryption": "none",
+        "fallbacks": [
+          {
+            "dest": "3333",
+            "xver": 2
+          }
+        ]
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      },
+      "streamSettings": {
+        "network": "raw",
+        "security": "reality",
+        "sockopt": {
+          "acceptProxyProtocol": false
+        },
+        "realitySettings": {
+          "show": false,
+          "xver": 2,
+          "target": "${TARGET_MTP}",
+          "spiderX": "/",
+          "shortIds": [
+            "${xray_shortIds_vrv}"
+          ],
+          "privateKey": "${xray_privateKey_vrv}",
+          "serverNames": [
+            "$DOMAIN"
+          ]
         }
       }
     },
-    "realitySettings": {
-      "show": false, "fingerprint": "firefox", "serverName": "$DOMAIN",
-      "password": "${xray_publicKey_vrv}", "shortId": "${xray_shortIds_vrv}", "spiderX": "/"
+    {
+      "tag": "vlessXHTTPrty",
+      "port": 3333,
+      "listen": "127.0.0.1",
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "${xray_uuid_vrv}"
+          }
+        ],
+        "decryption": "none"
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "xhttpSettings": {
+          "mode": "stream-one",
+          "path": "/${path_xhttp}"
+        },
+        "security": "none",
+        "sockopt": {
+          "acceptProxyProtocol": true
+        }
+      }
+    },
+    {
+      "tag": "vlessRAWtlsVISION",
+      "port": 8443,
+      "listen": "0.0.0.0",
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "flow": "xtls-rprx-vision",
+            "id": "${xray_uuid_vrv}"
+          }
+        ],
+        "decryption": "none",
+        "fallbacks": [
+          {
+            "path": "/${path_xhttp}22",
+            "dest": "@vless-ws",
+            "xver": 2
+          },
+          {
+            "path": "/ssws",
+            "dest": "4001"
+          },
+          {
+            "alpn": "h2",
+            "dest": "/dev/shm/nginx_h2.sock",
+            "xver": 2
+          },
+          {
+            "dest": "/dev/shm/nginxTLS.sock",
+            "xver": 2
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "raw",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "/var/lib/xray/cert/fullchain.pem",
+              "keyFile": "/var/lib/xray/cert/privkey.pem"
+            }
+          ],
+          "minVersion": "1.2",
+          "cipherSuites": "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256:TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256:TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384:TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384:TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256:TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+          "alpn": [
+            "h2",
+            "http/1.1"
+          ]
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    },
+    {
+      "tag": "vlessXHTTPtls",
+      "port": 8400,
+      "listen": "127.0.0.1",
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "${xray_uuid_vrv}"
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "xhttpSettings": {
+          "mode": "auto",
+          "path": "/${path_xhttp}"
+        },
+        "security": "none",
+        "sockopt": {
+          "acceptProxyProtocol": false
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    },
+    {
+      "tag": "vlessGRPCtls",
+      "port": 8411,
+      "listen": "127.0.0.1",
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "${xray_uuid_vrv}"
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "grpc",
+        "grpcSettings": {
+          "serviceName": "${path_xhttp}11"
+        },
+        "security": "none"
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    },
+    {
+      "listen": "@vless-ws",
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "${xray_uuid_vrv}"
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "acceptProxyProtocol": true,
+          "path": "/${path_xhttp}22"
+        },
+        "security": "none"
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      }
+    },
+    {
+      "tag": "telemt-local",
+      "port": 10443,
+      "listen": "127.0.0.1",
+      "protocol": "mixed",
+      "settings": {
+        "ip": "127.0.0.1",
+        "udp": true,
+        "auth": "password",
+        "accounts": [
+          {
+            "user": "${socksUser}",
+            "pass": "${socksPasw}"
+          }
+        ]
+      }
+    },
+    {
+      "tag": "socks-local",
+      "port": 10444,
+      "listen": "127.0.0.1",
+      "protocol": "mixed",
+      "settings": {
+        "udp": true
+      }
+    },
+    {
+      "listen": "127.0.0.1",
+      "port": 10185,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1"
+      },
+      "tag": "api"
+    },
+    {
+      "tag": "Hysteria2",
+      "listen": "0.0.0.0",
+      "port": 8080,
+      "protocol": "hysteria",
+      "settings": {
+        "version": 2,
+        "clients": [
+          {
+            "auth": "${xray_shortIds_vrv}"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "hysteria",
+        "security": "tls",
+        "tlsSettings": {
+          "serverName": "$DOMAIN",
+          "alpn": [
+            "h3"
+          ],
+          "certificates": [
+            {
+              "usage": "encipherment",
+              "certificateFile": "/var/lib/xray/cert/fullchain.pem",
+              "keyFile": "/var/lib/xray/cert/privkey.pem"
+            }
+          ]
+        },
+        "hysteriaSettings": {
+          "version": 2,
+          "auth": "${xray_shortIds_vrv}"
+        },
+        "finalmask": {
+          "quicParams": {
+            "congestion": "brutal",
+            "brutalUp": "200 mbps",
+            "brutalDown": "200 mbps"
+          }
+        }
+      }
     }
-  }
-}'
-
-
-# --- Config 3
-OUT_VISION='{
-  "tag": "proxy",
-  "protocol": "vless",
-  "settings": {
-    "vnext": [{
-      "address": "$DOMAIN",
-      "port": 8443,
-      "users": [{ "id": "${xray_uuid_vrv}", "flow": "xtls-rprx-vision", "encryption": "none" }]
-    }]
-  },
-  "streamSettings": {
-    "network": "raw",
-    "security": "tls",
-    "tlsSettings": {
-      "serverName": "$DOMAIN",
-      "fingerprint": "firefox"
+  ],
+  "outbounds": [
+    {
+      "tag": "direct",
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIPv4"
+      }
+    },
+    {
+      "tag": "block",
+      "protocol": "blackhole"
+    },
+    {
+      "tag": "warp",
+      "protocol": "socks",
+      "settings": {
+        "servers": [
+          {
+            "address": "127.0.0.1",
+            "port": 40000
+          }
+        ]
+      }
     }
+  ],
+  "routing": {
+    "rules": [
+      {
+        "inboundTag": [
+          "api"
+        ],
+        "outboundTag": "api"
+      },
+      {
+        "ip": [
+          "geoip:private"
+        ],
+        "outboundTag": "block"
+      },
+      {
+        "port": "25",
+        "outboundTag": "block"
+      },
+      {
+        "protocol": [
+          "bittorrent"
+        ],
+        "outboundTag": "block"
+      },
+      {
+        "domain": [
+          "geosite:private",
+          "geosite:win-spy",
+          "geosite:category-ads",
+          "geosite:category-ads-all"
+        ],
+        "outboundTag": "block"
+      },
+      {
+        "domain": [
+          "habr.com",
+          "geosite:canva",
+          "geosite:openai",
+          "geosite:spotify",
+          "geosite:whatsapp",
+          "geosite:anthropic",
+          "geosite:google-gemini",
+          "geosite:github-copilot"
+        ],
+        "outboundTag": "${TAG_WARP}"
+      }
+    ],
+    "domainStrategy": "IPIfNonMatch"
   }
-}'
-
-# --- Config 4
-OUT_XHTTP='{
-  "tag": "proxy",
-  "protocol": "vless",
-  "settings": {
-    "vnext": [{
-      "address": "$DOMAIN",
-      "port": 8443,
-      "users": [{ "id": "${xray_uuid_vrv}", "encryption": "none" }]
-    }]
-  },
-  "streamSettings": {
-    "network": "xhttp",
-    "xhttpSettings": {
-		"extra": {
-			"headers": {
-			},
-			"noGRPCHeader": false,
-			"scMaxEachPostBytes": 1500000,
-			"scMinPostsIntervalMs": 20,
-			"scStreamUpServerSecs": "60-240",
-			"xPaddingBytes": "400-800",
-			"xmux": {
-				"cMaxReuseTimes": "1000-3000",
-				"hKeepAlivePeriod": 0,
-				"hMaxRequestTimes": "400-700",
-				"hMaxReusableSecs": "1200-1800",
-				"maxConcurrency": "3-5",
-				"maxConnections": 0
-			}
-		},
-	"mode": "auto", "path": "/${path_xhttp}" },
-    "security": "tls",
-    "tlsSettings": { "serverName": "$DOMAIN", "fingerprint": "firefox" }
-  }
-}'
-
-# --- Config 5
-# Важно: alpn h2 обязателен для корректной работы через Nginx
-OUT_GRPC='{
-  "tag": "proxy",
-  "protocol": "vless",
-  "settings": {
-    "vnext": [{
-      "address": "$DOMAIN",
-      "port": 8443,
-      "users": [{ "id": "${xray_uuid_vrv}", "encryption": "none" }]
-    }]
-  },
-  "streamSettings": {
-    "network": "grpc",
-    "grpcSettings": { "serviceName": "${path_xhttp}11", "multiMode": false },
-    "security": "tls",
-    "tlsSettings": { "serverName": "$DOMAIN", "alpn": ["h2"], "fingerprint": "firefox" }
-  }
-}'
-
-# --- Config 6
-OUT_WS='{
-  "tag": "proxy",
-  "protocol": "vless",
-  "settings": {
-    "vnext": [{
-      "address": "$DOMAIN",
-      "port": 8443,
-      "users": [{ "id": "${xray_uuid_vrv}", "encryption": "none" }]
-    }]
-  },
-  "streamSettings": {
-    "network": "ws",
-    "wsSettings": { "path": "/${path_xhttp}22" },
-    "security": "tls",
-    "tlsSettings": { "serverName": "$DOMAIN", "fingerprint": "firefox" }
-  }
-}'
-
-
-
-(
-    echo "["
-    print_config "$OUT_REALITY_XHTTP"  "🇪🇺 VLESS XHTTP REALITY EXTRA"
-    echo ","
-    print_config "$OUT_REALITY_VISION" "🇪🇺 VLESS RAW REALITY VISION"
-    echo ","
-    print_config "$OUT_VISION"    "🇪🇺 VLESS RAW TLS VISION"
-    echo ","
-    print_config "$OUT_XHTTP"     "🇪🇺 VLESS XHTTP TLS EXTRA"
-    echo ","
-    print_config "$OUT_GRPC"      "🇪🇺 VLESS gRPC TLS"
-    echo ","
-    print_config "$OUT_WS"        "🇪🇺 VLESS WS TLS"
-    echo "]"
-) | envsubst > "$WEB_PATH/$path_subpage.json"
+}
+EOF
 
 systemctl restart xray
 echo -e "Перезапуск XRAY"
 
-# Формирование ссылок
-subPageLink="https://$DOMAIN/$path_subpage.json"
+# Формирование страниц
 rawSubPageLink="https://$DOMAIN/${path_subpage}.txt"
 
-# Формирование ссылок
-linkRTY1="vless://${xray_uuid_vrv}@$DOMAIN:443?security=reality&type=tcp&headerType=&path=&host=&flow=xtls-rprx-vision&sni=$DOMAIN&fp=firefox&pbk=${xray_publicKey_vrv}&sid=${xray_shortIds_vrv}&spx=%2F#vless%20RAW%20Reality%20VISION"
+# Формирование vless ссылок
+linkRTY2="vless://${xray_uuid_vrv}@$DOMAIN:443?security=reality&type=xhttp&headerType=&path=%2F$path_xhttp&host=&mode=stream-one&extra=%7B%22xmux%22%3A%7B%22cMaxReuseTimes%22%3A%221000-3000%22%2C%22maxConcurrency%22%3A%223-5%22%2C%22maxConnections%22%3A0%2C%22hKeepAlivePeriod%22%3A0%2C%22hMaxRequestTimes%22%3A%22400-700%22%2C%22hMaxReusableSecs%22%3A%221200-1800%22%7D%2C%22headers%22%3A%7B%7D%2C%22noGRPCHeader%22%3Afalse%2C%22xPaddingBytes%22%3A%22400-800%22%2C%22scMaxEachPostBytes%22%3A1500000%2C%22scMinPostsIntervalMs%22%3A20%2C%22scStreamUpServerSecs%22%3A%2260-240%22%7D&sni=$DOMAIN&fp=$fpBro&pbk=${xray_publicKey_vrv}&sid=${xray_shortIds_vrv}&spx=%2F#${FLAG_ENCODED}%20vless%20XHTTP%20Reality%20EXTRA"
 
-linkRTY2="vless://${xray_uuid_vrv}@$DOMAIN:443?security=reality&type=xhttp&headerType=&path=%2F$path_xhttp&host=&mode=stream-one&extra=%7B%22xmux%22%3A%7B%22cMaxReuseTimes%22%3A%221000-3000%22%2C%22maxConcurrency%22%3A%223-5%22%2C%22maxConnections%22%3A0%2C%22hKeepAlivePeriod%22%3A0%2C%22hMaxRequestTimes%22%3A%22400-700%22%2C%22hMaxReusableSecs%22%3A%221200-1800%22%7D%2C%22headers%22%3A%7B%7D%2C%22noGRPCHeader%22%3Afalse%2C%22xPaddingBytes%22%3A%22400-800%22%2C%22scMaxEachPostBytes%22%3A1500000%2C%22scMinPostsIntervalMs%22%3A20%2C%22scStreamUpServerSecs%22%3A%2260-240%22%7D&sni=$DOMAIN&fp=firefox&pbk=${xray_publicKey_vrv}&sid=${xray_shortIds_vrv}&spx=%2F#vless%20XHTTP%20Reality%20EXTRA"
-
-linkTLS1="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=tcp&headerType=&path=&host=&flow=xtls-rprx-vision&sni=$DOMAIN&fp=firefox&spx=%2F#vless%20RAW%20TLS%20Vision"
-
-
-linkTLS2="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=xhttp&headerType=&path=%2F${path_xhttp}&host=&mode=auto&extra=%7B%22xmux%22%3A%7B%22cMaxReuseTimes%22%3A%221000-3000%22%2C%22maxConcurrency%22%3A%223-5%22%2C%22maxConnections%22%3A0%2C%22hKeepAlivePeriod%22%3A0%2C%22hMaxRequestTimes%22%3A%22400-700%22%2C%22hMaxReusableSecs%22%3A%221200-1800%22%7D%2C%22headers%22%3A%7B%7D%2C%22noGRPCHeader%22%3Afalse%2C%22xPaddingBytes%22%3A%22400-800%22%2C%22scMaxEachPostBytes%22%3A1500000%2C%22scMinPostsIntervalMs%22%3A20%2C%22scStreamUpServerSecs%22%3A%2260-240%22%7D&sni=$DOMAIN&fp=firefox&spx=%2F#vless%20XHTTP%20TLS"
-
-linkTLS3="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=ws&headerType=&path=%2F${path_xhttp}22&host=&sni=$DOMAIN&fp=firefox&spx=%2F#vless%20WS%20TLS"
-
-linkTLS4="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=grpc&headerType=&serviceName=${path_xhttp}11&host=&sni=$DOMAIN&fp=firefox&spx=%2F#vless%20GRPC%20TLS"
+linkRTY1="vless://${xray_uuid_vrv}@$DOMAIN:443?security=reality&type=tcp&headerType=&path=&host=&flow=xtls-rprx-vision&sni=$DOMAIN&fp=$fpBro&pbk=${xray_publicKey_vrv}&sid=${xray_shortIds_vrv}&spx=%2F#${FLAG_ENCODED}%20vless%20RAW%20Reality%20VISION"
+linkTLS1="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=tcp&headerType=&path=&host=&flow=xtls-rprx-vision&sni=$DOMAIN&fp=$fpBro&spx=%2F#${FLAG_ENCODED}%20vless%20RAW%20TLS%20Vision"
+linkTLS2="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=xhttp&headerType=&path=%2F${path_xhttp}&host=&mode=auto&extra=%7B%22xmux%22%3A%7B%22cMaxReuseTimes%22%3A%221000-3000%22%2C%22maxConcurrency%22%3A%223-5%22%2C%22maxConnections%22%3A0%2C%22hKeepAlivePeriod%22%3A0%2C%22hMaxRequestTimes%22%3A%22400-700%22%2C%22hMaxReusableSecs%22%3A%221200-1800%22%7D%2C%22headers%22%3A%7B%7D%2C%22noGRPCHeader%22%3Afalse%2C%22xPaddingBytes%22%3A%22400-800%22%2C%22scMaxEachPostBytes%22%3A1500000%2C%22scMinPostsIntervalMs%22%3A20%2C%22scStreamUpServerSecs%22%3A%2260-240%22%7D&sni=$DOMAIN&fp=$fpBro&spx=%2F#${FLAG_ENCODED}%20vless%20XHTTP%20TLS"
+linkTLS3="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=ws&headerType=&path=%2F${path_xhttp}22&host=&sni=$DOMAIN&fp=$fpBro&spx=%2F#${FLAG_ENCODED}%20vless%20WS%20TLS"
+linkTLS4="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=grpc&headerType=&serviceName=${path_xhttp}11&host=&sni=$DOMAIN&fp=$fpBro&spx=%2F#${FLAG_ENCODED}%20vless%20GRPC%20TLS"
 
 configListLink="https://$DOMAIN/$path_subpage.html"
 
 CONFIGS_ARRAY=(
     "VLESS XHTTP REALITY EXTRA (для моста)|$linkRTY2"
     "VLESS RAW REALITY VISION|$linkRTY1"
+	"HYSTERIA2|$hy2"
 	"VLESS RAW TLS VISION|$linkTLS1"
 	"VLESS XHTTP TLS EXTRA|$linkTLS2"
 	"VLESS WS TLS|$linkTLS3"
@@ -1036,9 +796,13 @@ CONFIGS_ARRAY=(
 )
 ALL_LINKS_TEXT=""
 
-echo -e "\n\n${GRN}Устанавливаем MTProto FakeTLS ${NC}"
-# source <(curl -sL https://github.com/xVRVx/autoXRAY/raw/refs/heads/main/test/telemt-test.sh)
-source <(curl -sL https://raw.githubusercontent.com/EtoDets/Auto-XRAY_Telemt/main/telemt.sh)
+if [ "$INSTALL_MTP" = true ]; then
+    echo -e "\n\n${GRN}Устанавливаем MTProto FakeTLS ${NC}"
+    source <(curl -sL https://raw.githubusercontent.com/EtoDets/Auto-XRAY_Telemt/main/telemt.sh)
+else
+    echo -e "\n\n${YEL}Установка MTProto FakeTLS пропущена.${NC}"
+    MTProto=""
+fi
 
 # --- ЗАПИСЬ HEAD (СТАТИКА, МИНИФИЦИРОВАННЫЕ СТИЛИ И JS) ---
 cat > "$WEB_PATH/$path_subpage.html" <<EOF
@@ -1061,34 +825,11 @@ cat >> "$WEB_PATH/$path_subpage.html" <<EOF
 
 <h2>📂 Ссылка на подписку</h2>
 <div class="config-row">
-    <div class="config-label">Sub link</div>
+    <div class="config-label">Subscription</div>
     <div class="config-code" id="rawLink">$rawSubPageLink</div>
     <button class="btn-action copy-btn" onclick="copyText('rawLink', this)">Copy</button>
     <button class="btn-action qr-btn" onclick="showQR('rawLink')">QR</button>
 </div>
-<div class="config-row">
-    <div class="config-label">MTProtoFakeTLS</div>
-    <div class="config-code" id="mtprotoSub">${MTProto}</div>
-    <button class="btn-action copy-btn" onclick="copyText('mtprotoSub', this)">Copy</button>
-    <a href="${MTProto}" target="_blank" class="btn-action qr-btn" title="автодобавление моста в тг" style="text-decoration:none">✈️ Add to TG</a>
-</div>
-<h2>📂 Ссылка на подписку (готовый конфиг клиента с роутингом)</h2>
-<div class="config-row">
-    <div class="config-label">Subscription</div>
-    <div class="config-code" id="subLink">$subPageLink</div>
-    <button class="btn-action copy-btn" onclick="copyText('subLink', this)">Copy</button>
-    <button class="btn-action qr-btn" onclick="showQR('subLink')">QR</button>
-</div>
-
-
-<h2>📱 Приложение HAPP (Windows/Android/iOS/MAC/Linux)</h2>
-
-<div class="btn-group">
-    <a href="happ://add/$subPageLink" class="btn">⚡ Add to HAPP</a>
-    <a href="https://www.happ.su/main/ru" target="_blank" class="btn download">⬇️ Download App</a>
-</div>
-<p>Маршрутизацию нужно выключить, она тут встроенная. По умолчанию она выключена - включается, если вы пользовались сторонними сервисами.</p>
-
 
 <h2>➡️ Конфиги</h2>
 EOF
@@ -1123,24 +864,20 @@ done
 } > "$WEB_PATH/${path_subpage}.txt"
 echo -e "${GRN}✅ Файл подписки .txt создан: $rawSubPageLink${NC}"
 
-SOCKS5_url="tg://socks?server=$DOMAIN&port=10443&user=${socksUser}&pass=${socksPasw}"
-
-# Дописываем Socks5, MTProto, All links и подвал
+# Добавляем MTProxy блок только если он установлен
+if [ "$INSTALL_MTP" = true ]; then
 cat >> "$WEB_PATH/$path_subpage.html" <<EOF
-<div class="config-row">
-    <div class="config-label">Socks5 (TG)</div>
-    <div class="config-code" id="sock">${SOCKS5_url}</div>
-    <button class="btn-action copy-btn" onclick="copyText('sock', this)">Copy</button>
-    <a href="${SOCKS5_url}" target="_blank" class="btn-action qr-btn" title="автодобавление в тг" style="text-decoration:none">✈️ Add to TG</a>
-</div>
-
 <div class="config-row">
     <div class="config-label">MTProtoFakeTLS (TG)</div>
     <div class="config-code" id="mtproto">${MTProto}</div>
     <button class="btn-action copy-btn" onclick="copyText('mtproto', this)">Copy</button>
     <a href="${MTProto}" target="_blank" class="btn-action qr-btn" title="автодобавление моста в тг" style="text-decoration:none">✈️ Add to TG</a>
 </div>
+EOF
+fi
 
+# Дописываем конец страницы
+cat >> "$WEB_PATH/$path_subpage.html" <<EOF
 <h2>💠 Все конфиги вместе</h2>
 <div class="config-row">
     <div class="config-code" id="cAll" style="max-height:60px;white-space:pre-wrap;word-break:break-all">$ALL_LINKS_TEXT</div>
@@ -1148,7 +885,7 @@ cat >> "$WEB_PATH/$path_subpage.html" <<EOF
     <button class="btn-action qr-btn" onclick="showQR('cAll')">QR</button>
 </div>
 
-<div><a style="color:white;margin:40px auto 20px;display:block;text-align:center;" href="https://github.com/xVRVx/autoXRAY">https://github.com/xVRVx/autoXRAY</a></div>
+<div><a style="color:white;margin:40px auto 20px;display:block;text-align:center;" href="https://github.com/xVRVx/autoXRAY">Original - https://github.com/xVRVx/autoXRAY</a></div>
 
 <div id="qrModal" class="modal-overlay"><div class="modal-content"><div id="qrcode"></div><button class="close-modal-btn" onclick="closeModal()">Close</button></div></div>
 </body></html>
@@ -1158,16 +895,21 @@ EOF
 echo -e "\n${YEL}=== Финальная проверка статусов ===${NC}"
 
 # Проверка WARP-cli (Socks5 порт 40000)
-if ss -nlt | grep -q ":40000\b"; then
-    echo -e "WARP-cli: ${GRN}LISTENING${NC}"
-else
-    echo -e "WARP-cli: ${RED}NOT LISTENING${NC}"
-    echo "Возникла ошибка! Возможные пути решения проблемы смотрите здесь:"
-    echo "https://github.com/xVRVx/autoXRAY/blob/main/test/warp-readme.md"
+if [ "$INSTALL_WARP" = true ]; then
+    if ss -nlt | grep -q ":40000\b"; then
+        echo -e "WARP-cli: ${GRN}LISTENING${NC}"
+    else
+        echo -e "WARP-cli: ${RED}NOT LISTENING${NC}"
+        echo "Возникла ошибка! Возможные пути решения проблемы смотрите здесь:"
+        echo "https://github.com/xVRVx/autoXRAY/blob/main/test/warp-readme.md"
+    fi
 fi
 
 # Проверка Telemt
-if systemctl is-active --quiet telemt; then echo -e "Telemt: ${GRN}RUNNING${NC}"; else echo -e "Telemt: ${RED}STOPPED/ERROR${NC}"; fi
+if [ "$INSTALL_MTP" = true ]; then
+    if systemctl is-active --quiet telemt; then echo -e "Telemt: ${GRN}RUNNING${NC}"; else echo -e "Telemt: ${RED}STOPPED/ERROR${NC}"; fi
+fi
+
 
 # Проверка Nginx
 if systemctl is-active --quiet nginx; then
@@ -1186,48 +928,44 @@ fi
 echo -e "\n\n${GRN}Устанавка update-xray-geodata ${NC}"
 source <(curl -sL https://raw.githubusercontent.com/EtoDets/Auto-XRAY_Telemt/main/geodata_update.sh)
 
-echo -e "
-${YEL}MTProto FakeTLS для ТГ${NC}
-$MTProto
+echo -e "\n"
 
-${YEL}VLESS XHTTP REALITY EXTRA (для моста) ${NC}
+if [ "$INSTALL_MTP" = true ]; then
+    echo -e "${YEL}MTProto FakeTLS для ТГ${NC}\n$MTProto\n"
+fi
+
+echo -e "
+    ${YEL}VLESS XHTTP REALITY EXTRA (для моста) ${NC}
 $linkRTY2
 
-${YEL}VLESS RAW REALITY VISION ${NC}
+    ${YEL}VLESS RAW REALITY VISION ${NC}
 $linkRTY1
 
-${YEL}VLESS XHTTP TLS EXTRA ${NC}
+    ${YEL}VLESS XHTTP TLS EXTRA ${NC}
 $linkRTY2
 
-${YEL}Ваша json страничка подписки ${NC}
-$subPageLink
-
-${YEL}Ваша .txt подписка (голые ссылки) ${NC}
+    ${YEL}Ваша .txt подписка (голые ссылки) ${NC}
 ${GRN}$rawSubPageLink ${NC}
 
-${YEL}Ссылка на сохраненные конфиги ${NC}
+    ${YEL}Ссылка на сохраненные конфиги ${NC}
 ${GRN}$configListLink ${NC}
-
-
-Открыт локальный socks5 на порту 10808, 2080 и http на 10809.
-
-${GRN}Поддержать автора: https://github.com/xVRVx/autoXRAY ${NC}
-
 "
+
+
 
 # --- Сохраняем ссылки в файл в домашней папке пользователя ---
 LINKS_FILE="$HOME/autoXRAY_links.txt"
+
 cat > "$LINKS_FILE" <<EOF
-SubPageLink (json подписка): https://$DOMAIN/${path_subpage}.json
 RawSubPageLink (.txt подписка): https://$DOMAIN/${path_subpage}.txt
 ConfigListLink (html страница): https://$DOMAIN/${path_subpage}.html
 EOF
+
 echo -e "${GRN}✅ Ссылки сохранены в файл: $LINKS_FILE${NC}"
 
-# --- Создаём симлинки для удобного доступа ---
-ln -sfn /etc/nginx/ ~/xray_nginx
-ln -sfn /var/log/xray/ ~/xray-log
-ln -sfn /var/www/ ~/xray_web-config
-ln -sfn /usr/local/etc/xray/ ~/xray-config
 
-echo -e "${GRN}✅ Симлинки созданы${NC}"
+# --- Создаём симлинки для удобного доступа ---
+ln -sfn /etc/nginx/ ~/.nginx
+ln -sfn /var/www/ ~/.web_config
+ln -sfn /var/log/xray/ ~/.xray_log
+ln -sfn /usr/local/etc/xray/ ~/.xray_config
