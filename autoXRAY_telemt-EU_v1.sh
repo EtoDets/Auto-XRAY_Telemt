@@ -783,6 +783,8 @@ linkTLS2="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=xhttp&headerTy
 linkTLS3="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=ws&headerType=&path=%2F${path_xhttp}22&host=&sni=$DOMAIN&fp=$fpBro&spx=%2F#${FLAG_ENCODED}%20vless%20WS%20TLS"
 linkTLS4="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=grpc&headerType=&serviceName=${path_xhttp}11&host=&sni=$DOMAIN&fp=$fpBro&spx=%2F#${FLAG_ENCODED}%20vless%20GRPC%20TLS"
 
+hy2="hy2://${xray_shortIds_vrv}@$DOMAIN:8080/?sni=$DOMAIN&alpn=h3"
+
 configListLink="https://$DOMAIN/$path_subpage.html"
 
 CONFIGS_ARRAY=(
@@ -861,6 +863,7 @@ done
     printf '%s\n' "${linkTLS2}"
     printf '%s\n' "${linkTLS3}"
     printf '%s\n' "${linkTLS4}"
+    printf '%s\n' "${$hy2}"
 } > "$WEB_PATH/${path_subpage}.txt"
 echo -e "${GRN}✅ Файл подписки .txt создан: $rawSubPageLink${NC}"
 
@@ -965,7 +968,7 @@ echo -e "${GRN}✅ Ссылки сохранены в файл: $LINKS_FILE${NC}
 
 
 # --- Создаём симлинки для удобного доступа ---
-ln -sfn /etc/nginx/ ~/.nginx
-ln -sfn /var/www/ ~/.web_config
-ln -sfn /var/log/xray/ ~/.xray_log
-ln -sfn /usr/local/etc/xray/ ~/.xray_config
+ln -sfn /etc/nginx/ ~/!nginx
+ln -sfn /var/www/ ~/!web_config
+ln -sfn /var/log/xray/ ~/!xray_log
+ln -sfn /usr/local/etc/xray/ ~/!xray_config
