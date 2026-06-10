@@ -863,7 +863,7 @@ done
     printf '%s\n' "${linkTLS2}"
     printf '%s\n' "${linkTLS3}"
     printf '%s\n' "${linkTLS4}"
-    printf '%s\n' "${$hy2}"
+    printf '%s\n' "${hy2}"
 } > "$WEB_PATH/${path_subpage}.txt"
 echo -e "${GRN}✅ Файл подписки .txt создан: $rawSubPageLink${NC}"
 
