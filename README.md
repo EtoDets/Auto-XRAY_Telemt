@@ -38,4 +38,13 @@ bash -c "$(curl -sL https://raw.githubusercontent.com/EtoDets/Auto-XRAY_Telemt/m
 ---
 ---
 
+## geosite-oisd
+```
+bash -c "$(curl -sL https://github.com/EtoDets/Auto-XRAY_Telemt/raw/main/geosite-oisd/geosite-oisd-create.sh)"
+```
+
+---
+---
+---
+
 ### Автор - https://github.com/xVRVx/autoXRAY
