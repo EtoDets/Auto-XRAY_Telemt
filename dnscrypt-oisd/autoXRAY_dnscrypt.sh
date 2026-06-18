@@ -239,7 +239,7 @@ echo -e "${GRN}✅ resolv.conf → 127.0.0.1 (chattr +i)${NC}"
 # ── 9. Cron обновление списков в 6:00 ─────────────────────────────────────────
 cat > "/etc/cron.d/dnscrypt-blocklists" << EOF
 # autoXRAY: обновление списков блокировок dnscrypt-proxy
-0 6 * * * root curl -fsSL https://nsfw.oisd.nl/domainswild -o $BLOCKLIST_NSFW && curl -fsSL https://small.oisd.nl/domainswild -o $BLOCKLIST_SMALL && cat $BLOCKLIST_NSFW $BLOCKLIST_SMALL | grep -v '^# ' | awk '!seen[$0]++' > $BLOCKLIST_MERGED && systemctl restart dnscrypt-proxy
+0 6 * * * root curl -fsSL https://nsfw.oisd.nl/domainswild -o $BLOCKLIST_NSFW && curl -fsSL https://small.oisd.nl/domainswild -o $BLOCKLIST_SMALL && cat $BLOCKLIST_NSFW $BLOCKLIST_SMALL | grep -v '^# ' | awk '!seen[\$0]++' > $BLOCKLIST_MERGED && systemctl restart dnscrypt-proxy
 EOF
 chmod 644 /etc/cron.d/dnscrypt-blocklists
 echo -e "${GRN}✅ Cron обновление списков: ежедневно в 6:00${NC}"
