@@ -14,7 +14,7 @@ BLOCKLIST_NSFW="$DNSCRYPT_CONF_DIR/blocked-nsfw.txt"
 BLOCKLIST_SMALL="$DNSCRYPT_CONF_DIR/blocked-small.txt"
 BLOCKLIST_MERGED="$DNSCRYPT_CONF_DIR/blocked-nsfw-small-ads.txt"
 
-echo -e "${GRN}=== autoXRAY dnscrypt-proxy installer ===${NC}"
+echo -e "${GRN}=== autoXRAY + dnscrypt-proxy installer ===${NC}"
 
 [[ $EUID -eq 0 ]] || { echo -e "${RED}❌ Скрипту нужны root права${NC}"; exit 1; }
 
@@ -139,7 +139,7 @@ else
     exit 1
 fi
 
-cat "$BLOCKLIST_NSFW" "$BLOCKLIST_SMALL" | sort -u > "$BLOCKLIST_MERGED"
+cat "$BLOCKLIST_NSFW" "$BLOCKLIST_SMALL" | grep -v '^# ' | awk '!seen[$0]++' > "$BLOCKLIST_MERGED"
 echo -e "${GRN}✅ blocked-nsfw-small-ads.txt (merged): $(wc -l < "$BLOCKLIST_MERGED") уникальных строк${NC}"
 
 # ── 6. Конфиг ─────────────────────────────────────────────────────────────────
@@ -173,7 +173,7 @@ log_file = '$DNSCRYPT_LOG_DIR/dnscrypt-proxy.log'
 
 [sources]
   [sources.public-resolvers]
-  urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/maste/public-resolvers.md', 'https://download.dnscrypt.info/resolvers-list/v3/public-resolvers.md']
+  urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/public-resolvers.md', 'https://download.dnscrypt.info/resolvers-list/v3/public-resolvers.md']
   cache_file = '$DNSCRYPT_CONF_DIR/public-resolvers.md'
   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
   refresh_delay = 72
@@ -239,7 +239,7 @@ echo -e "${GRN}✅ resolv.conf → 127.0.0.1 (chattr +i)${NC}"
 # ── 9. Cron обновление списков в 6:00 ─────────────────────────────────────────
 cat > "/etc/cron.d/dnscrypt-blocklists" << EOF
 # autoXRAY: обновление списков блокировок dnscrypt-proxy
-0 6 * * * root curl -fsSL https://nsfw.oisd.nl/domainswild -o $BLOCKLIST_NSFW && curl -fsSL https://small.oisd.nl/domainswild -o $BLOCKLIST_SMALL && cat $BLOCKLIST_NSFW $BLOCKLIST_SMALL | sort -u > $BLOCKLIST_MERGED && systemctl reload dnscrypt-proxy
+0 6 * * * root curl -fsSL https://nsfw.oisd.nl/domainswild -o $BLOCKLIST_NSFW && curl -fsSL https://small.oisd.nl/domainswild -o $BLOCKLIST_SMALL && cat $BLOCKLIST_NSFW $BLOCKLIST_SMALL | grep -v '^# ' | awk '!seen[$0]++' > $BLOCKLIST_MERGED && systemctl restart dnscrypt-proxy
 EOF
 chmod 644 /etc/cron.d/dnscrypt-blocklists
 echo -e "${GRN}✅ Cron обновление списков: ежедневно в 6:00${NC}"
@@ -280,8 +280,10 @@ ${YEL}blocked-nsfw.txt:${NC}        ${CYN}$(wc -l < $BLOCKLIST_NSFW) строк$
 ${YEL}blocked-small.txt:${NC}       ${CYN}$(wc -l < $BLOCKLIST_SMALL) строк${NC}
 ${YEL}blocked-nsfw-small-ads:${NC}  ${CYN}$(wc -l < $BLOCKLIST_MERGED) уникальных строк${NC}
 ${YEL}Cron:${NC}                    ${GRN}/etc/cron.d/dnscrypt-blocklists${NC}
+${YEL}Config:${NC}                  ${GRN}$DNSCRYPT_CONF_DIR/dnscrypt-proxy.toml/${NC}
 ${YEL}Логи:${NC}                    ${GRN}$DNSCRYPT_LOG_DIR/${NC}
 
 ${CYN}Для сброса DNS на дефолт (1.1.1.1/9.9.9.9):${NC}
   bash $(basename $0) -default
+  bash <(curl -sL https://github.com/EtoDets/Auto-XRAY_Telemt/raw/main/dnscrypt-oisd/autoXRAY_dnscrypt.sh) -default
 "
