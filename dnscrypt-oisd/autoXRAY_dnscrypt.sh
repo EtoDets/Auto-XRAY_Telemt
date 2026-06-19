@@ -119,30 +119,52 @@ else
     echo -e "${GRN}✅ dnscrypt-proxy $LATEST_VERSION установлен в $DNSCRYPT_BIN${NC}"
 fi
 
-# ── 5. Скачивание списков блокировок и мёрдж ──────────────────────────────────
+# ── 5. Режим блокировок ───────────────────────────────────────────────────────
+BLOCKLIST_MODE="both"
+if [[ "$1" == "-ads-only" ]]; then
+    BLOCKLIST_MODE="ads"
+    echo -e "${YEL}Режим: только реклама (-ads-only)${NC}"
+elif [[ "$1" == "-nsfw-only" ]]; then
+    BLOCKLIST_MODE="nsfw"
+    echo -e "${YEL}Режим: только nsfw (-nsfw-only)${NC}"
+else
+    echo -e "${YEL}Режим: nsfw + реклама (по умолчанию)${NC}"
+fi
+
+# ── 6. Скачивание списков блокировок ──────────────────────────────────────────
 # ВАЖНО: скачиваем ДО остановки сервиса, чтобы не ломать DNS
 echo -e "${YEL}Скачивание списков блокировок oisd...${NC}"
 
-curl -fsSL "https://nsfw.oisd.nl/domainswild" -o "$BLOCKLIST_NSFW"
-if [ $? -eq 0 ]; then
-    echo -e "${GRN}✅ blocked-nsfw.txt: $(wc -l < "$BLOCKLIST_NSFW") строк${NC}"
-else
-    echo -e "${RED}❌ Ошибка скачивания nsfw.oisd.nl${NC}"
-    exit 1
+if [[ "$BLOCKLIST_MODE" == "both" || "$BLOCKLIST_MODE" == "nsfw" ]]; then
+    curl -fsSL "https://nsfw.oisd.nl/domainswild" -o "$BLOCKLIST_NSFW"
+    if [ $? -eq 0 ]; then
+        echo -e "${GRN}✅ blocked-nsfw.txt: $(wc -l < "$BLOCKLIST_NSFW") строк${NC}"
+    else
+        echo -e "${RED}❌ Ошибка скачивания nsfw.oisd.nl${NC}"
+        exit 1
+    fi
 fi
 
-curl -fsSL "https://small.oisd.nl/domainswild" -o "$BLOCKLIST_SMALL"
-if [ $? -eq 0 ]; then
-    echo -e "${GRN}✅ blocked-small.txt: $(wc -l < "$BLOCKLIST_SMALL") строк${NC}"
-else
-    echo -e "${RED}❌ Ошибка скачивания small.oisd.nl${NC}"
-    exit 1
+if [[ "$BLOCKLIST_MODE" == "both" || "$BLOCKLIST_MODE" == "ads" ]]; then
+    curl -fsSL "https://small.oisd.nl/domainswild" -o "$BLOCKLIST_SMALL"
+    if [ $? -eq 0 ]; then
+        echo -e "${GRN}✅ blocked-small.txt: $(wc -l < "$BLOCKLIST_SMALL") строк${NC}"
+    else
+        echo -e "${RED}❌ Ошибка скачивания small.oisd.nl${NC}"
+        exit 1
+    fi
 fi
 
-cat "$BLOCKLIST_NSFW" "$BLOCKLIST_SMALL" | grep -v '^# ' | awk '!seen[$0]++' > "$BLOCKLIST_MERGED"
-echo -e "${GRN}✅ blocked-nsfw-small-ads.txt (merged): $(wc -l < "$BLOCKLIST_MERGED") уникальных строк${NC}"
+if [[ "$BLOCKLIST_MODE" == "both" ]]; then
+    cat "$BLOCKLIST_NSFW" "$BLOCKLIST_SMALL" | grep -v '^# ' | grep -v '^$' | awk '!seen[$0]++' > "$BLOCKLIST_MERGED"
+elif [[ "$BLOCKLIST_MODE" == "nsfw" ]]; then
+    grep -v '^# ' "$BLOCKLIST_NSFW" | grep -v '^$' > "$BLOCKLIST_MERGED"
+elif [[ "$BLOCKLIST_MODE" == "ads" ]]; then
+    grep -v '^# ' "$BLOCKLIST_SMALL" | grep -v '^$' > "$BLOCKLIST_MERGED"
+fi
+echo -e "${GRN}✅ blocked-nsfw-small-ads.txt: $(wc -l < "$BLOCKLIST_MERGED") строк${NC}"
 
-# ── 6. Конфиг ─────────────────────────────────────────────────────────────────
+# ── 7. Конфиг ─────────────────────────────────────────────────────────────────
 cat > "$DNSCRYPT_CONF_DIR/dnscrypt-proxy.toml" << EOF
 # autoXRAY dnscrypt-proxy config
 
@@ -185,7 +207,7 @@ log_file = '$DNSCRYPT_LOG_DIR/dnscrypt-proxy.log'
 EOF
 echo -e "${GRN}✅ Конфиг создан: $DNSCRYPT_CONF_DIR/dnscrypt-proxy.toml${NC}"
 
-# ── 7. Systemd сервис ──────────────────────────────────────────────────────────
+# ── 8. Systemd сервис ──────────────────────────────────────────────────────────
 cat > "/etc/systemd/system/dnscrypt-proxy.service" << EOF
 [Unit]
 Description=dnscrypt-proxy
@@ -217,7 +239,7 @@ else
     exit 1
 fi
 
-# ── 8. resolv.conf ─────────────────────────────────────────────────────────────
+# ── 9. resolv.conf ─────────────────────────────────────────────────────────────
 chattr -i /etc/resolv.conf 2>/dev/null
 
 if systemctl is-active --quiet systemd-resolved; then
@@ -236,15 +258,22 @@ EOF
 chattr +i /etc/resolv.conf
 echo -e "${GRN}✅ resolv.conf → 127.0.0.1 (chattr +i)${NC}"
 
-# ── 9. Cron обновление списков в 6:00 ─────────────────────────────────────────
+# ── 10. Cron обновление списков в 6:00 ────────────────────────────────────────
+if [[ "$BLOCKLIST_MODE" == "both" ]]; then
+    CRON_CMD="curl -fsSL https://nsfw.oisd.nl/domainswild -o $BLOCKLIST_NSFW && curl -fsSL https://small.oisd.nl/domainswild -o $BLOCKLIST_SMALL && cat $BLOCKLIST_NSFW $BLOCKLIST_SMALL | grep -v '^# ' | grep -v '^$' | awk '!seen[\$0]++' > $BLOCKLIST_MERGED && systemctl restart dnscrypt-proxy"
+elif [[ "$BLOCKLIST_MODE" == "nsfw" ]]; then
+    CRON_CMD="curl -fsSL https://nsfw.oisd.nl/domainswild -o $BLOCKLIST_NSFW && grep -v '^# ' $BLOCKLIST_NSFW | grep -v '^$' > $BLOCKLIST_MERGED && systemctl restart dnscrypt-proxy"
+elif [[ "$BLOCKLIST_MODE" == "ads" ]]; then
+    CRON_CMD="curl -fsSL https://small.oisd.nl/domainswild -o $BLOCKLIST_SMALL && grep -v '^# ' $BLOCKLIST_SMALL | grep -v '^$' > $BLOCKLIST_MERGED && systemctl restart dnscrypt-proxy"
+fi
+
 cat > "/etc/cron.d/dnscrypt-blocklists" << EOF
-# autoXRAY: обновление списков блокировок dnscrypt-proxy
-0 6 * * * root curl -fsSL https://nsfw.oisd.nl/domainswild -o $BLOCKLIST_NSFW && curl -fsSL https://small.oisd.nl/domainswild -o $BLOCKLIST_SMALL && cat $BLOCKLIST_NSFW $BLOCKLIST_SMALL | grep -v '^# ' | awk '!seen[\$0]++' > $BLOCKLIST_MERGED && systemctl restart dnscrypt-proxy
+0 6 * * * root $CRON_CMD
 EOF
 chmod 644 /etc/cron.d/dnscrypt-blocklists
-echo -e "${GRN}✅ Cron обновление списков: ежедневно в 6:00${NC}"
+echo -e "${GRN}✅ Cron обновление списков: ежедневно в 6:00 (режим: $BLOCKLIST_MODE)${NC}"
 
-# ── 10. Проверка ───────────────────────────────────────────────────────────────
+# ── 11. Проверка ───────────────────────────────────────────────────────────────
 echo -e "\n${YEL}=== Проверка (ждём 15 сек пока загрузятся upstream серверы) ===${NC}"
 sleep 15
 
@@ -265,20 +294,23 @@ else
     echo -e "${YEL}WARN — ответ: $BLOCKED${NC}"
 fi
 
-# ── 11. Итог ───────────────────────────────────────────────────────────────────
+# ── 12. Итог ───────────────────────────────────────────────────────────────────
 SVCSTATUS=$(systemctl is-active dnscrypt-proxy)
 [[ "$SVCSTATUS" == "active" ]] && SVCCOLOR="$GRN" || SVCCOLOR="$RED"
 
+BLOCKLIST_INFO=""
+[[ "$BLOCKLIST_MODE" == "both" || "$BLOCKLIST_MODE" == "nsfw" ]] && BLOCKLIST_INFO+="${YEL}blocked-nsfw.txt:${NC}        ${CYN}$(wc -l < $BLOCKLIST_NSFW) строк${NC}\n"
+[[ "$BLOCKLIST_MODE" == "both" || "$BLOCKLIST_MODE" == "ads" ]] && BLOCKLIST_INFO+="${YEL}blocked-small.txt:${NC}       ${CYN}$(wc -l < $BLOCKLIST_SMALL) строк${NC}\n"
+BLOCKLIST_INFO+="${YEL}blocked-nsfw-small-ads:${NC}  ${CYN}$(wc -l < $BLOCKLIST_MERGED) строк (режим: $BLOCKLIST_MODE)${NC}"
+
 echo -e "
 ${CYN}╔══════════════════════════════════════════╗
-║           === Итог ===                   ║
+║               === Итог ===               ║
 ╚══════════════════════════════════════════╝${NC}
 ${YEL}Версия:${NC}                  ${GRN}$($DNSCRYPT_BIN --version 2>/dev/null || echo 'n/a')${NC}
 ${YEL}Сервис:${NC}                  ${SVCCOLOR}${SVCSTATUS}${NC}
 ${YEL}resolv.conf:${NC}             ${GRN}$(cat /etc/resolv.conf | tr '\n' ' ')${NC}
-${YEL}blocked-nsfw.txt:${NC}        ${CYN}$(wc -l < $BLOCKLIST_NSFW) строк${NC}
-${YEL}blocked-small.txt:${NC}       ${CYN}$(wc -l < $BLOCKLIST_SMALL) строк${NC}
-${YEL}blocked-nsfw-small-ads:${NC}  ${CYN}$(wc -l < $BLOCKLIST_MERGED) уникальных строк${NC}
+$(echo -e "$BLOCKLIST_INFO")
 ${YEL}Cron:${NC}                    ${GRN}/etc/cron.d/dnscrypt-blocklists${NC}
 ${YEL}Config:${NC}                  ${GRN}$DNSCRYPT_CONF_DIR/dnscrypt-proxy.toml/${NC}
 ${YEL}Логи:${NC}                    ${GRN}$DNSCRYPT_LOG_DIR/${NC}
