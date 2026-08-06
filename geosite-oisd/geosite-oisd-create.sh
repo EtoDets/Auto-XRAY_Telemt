@@ -42,6 +42,11 @@ BINARY_PATH="/usr/local/bin/domain-list-community"
 OUTPUT_DIR="/usr/local/share/xray"
 OUTPUT_NAME="oisd.dat"
 DATA_DIR="/tmp/oisd-data"
+WHITELIST=(
+    "pic.rutube.ru"
+)
+
+WHITELIST_PATTERN=$(printf '%s\n' "${WHITELIST[@]}")
 
 rm -rf "$DATA_DIR"
 mkdir -p "$DATA_DIR"
@@ -56,14 +61,16 @@ grep -v '^#' /tmp/nsfw_raw.txt | grep -v '^$' | sort -u > "$DATA_DIR/nsfw-small"
 rm /tmp/nsfw_raw.txt
 echo "[$(date)] nsfw-small: $(wc -l < "$DATA_DIR/nsfw-small") доменов"
 
-echo "[$(date)] Скачиваем oisd small..."
-wget -q --timeout=60 --tries=3 -O "/tmp/small_raw.txt" "https://small.oisd.nl/domainswild2"
-if [ $? -ne 0 ] || [ ! -s "/tmp/small_raw.txt" ]; then
-    echo "[$(date)] ОШИБКА: не удалось скачать small список"
+
+echo "[$(date)] Скачиваем oisd small-ads..."
+wget -q --timeout=60 --tries=3 -O "/tmp/small-ads_raw.txt" "https://small.oisd.nl/domainswild2"
+if [ $? -ne 0 ] || [ ! -s "/tmp/small-ads_raw.txt" ]; then
+    echo "[$(date)] ОШИБКА: не удалось скачать small-ads список"
     exit 1
 fi
-grep -v '^#' /tmp/small_raw.txt | grep -v '^$' | sort -u > "$DATA_DIR/small-ads"
-rm /tmp/small_raw.txt
+grep -v '^#' /tmp/small-ads_raw.txt | grep -v '^$' | grep -vFx "$WHITELIST_PATTERN" | sort -u > "$DATA_DIR/small-ads"
+
+rm /tmp/small-ads_raw.txt
 echo "[$(date)] small-ads: $(wc -l < "$DATA_DIR/small-ads") доменов"
 
 echo "[$(date)] Генерируем $OUTPUT_NAME..."
