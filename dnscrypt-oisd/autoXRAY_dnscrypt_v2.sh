@@ -372,5 +372,5 @@ ${YEL}Config:${NC}                  ${GRN}$DNSCRYPT_CONF_DIR/dnscrypt-proxy.toml
 ${YEL}Логи:${NC}                    ${GRN}$DNSCRYPT_LOG_DIR/${NC}
 
 ${CYN}Для сброса DNS на дефолт (1.1.1.1/9.9.9.9):${NC}
-  bash $(basename $0) -default
+  bash <(curl -sL https://github.com/EtoDets/Auto-XRAY_Telemt/raw/main/dnscrypt-oisd/autoXRAY_dnscrypt_v2.sh) -default
 "
